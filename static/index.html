@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Developer Profiler</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="bg"></div>
+  <main class="shell">
+    <header class="hero">
+      <p class="brand">Developer Profiler</p>
+      <h1>База застройщиков</h1>
+      <p class="lede">Скрин → карточка → звонок. Повторный скрин того же Instagram обновляет запись, а не плодит дубликаты.</p>
+    </header>
+
+    <section class="upload" id="dropzone">
+      <input type="file" id="file" accept="image/*" hidden />
+      <button type="button" class="upload-btn" id="pick">Выбрать скриншот</button>
+      <p class="hint">PNG / JPG — реклама или профиль Instagram</p>
+      <p class="status" id="status"></p>
+    </section>
+
+    <section class="stats" id="stats"></section>
+
+    <section class="panel table-panel">
+      <div class="toolbar">
+        <input type="search" id="search" class="search" placeholder="Поиск: имя, Instagram, телефон…" />
+        <select id="filter-status" class="select">
+          <option value="all">Все статусы</option>
+        </select>
+        <select id="filter-phone" class="select">
+          <option value="all">Все телефоны</option>
+          <option value="with">С телефоном</option>
+          <option value="without">Без телефона</option>
+        </select>
+        <a class="ghost-btn" href="/api/developers/export.csv">CSV</a>
+      </div>
+
+      <div class="table-wrap desktop-only">
+        <table>
+          <thead>
+            <tr>
+              <th>Компания</th>
+              <th>Instagram</th>
+              <th>Телефон</th>
+              <th>Статус</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr class="empty"><td colspan="4">Пока пусто — загрузи скриншот</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="mobile-cards" id="mobile-cards" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <div class="toast hidden" id="toast"></div>
+
+  <div class="modal hidden" id="modal" aria-hidden="true">
+    <div class="modal-backdrop" id="modal-backdrop"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="card-title">
+      <header class="modal-head">
+        <div>
+          <p class="modal-kicker">Карточка застройщика</p>
+          <h2 id="card-title">—</h2>
+          <p class="modal-meta" id="card-meta"></p>
+        </div>
+        <div class="modal-head-actions">
+          <button type="button" class="danger-btn" id="delete-btn">Удалить</button>
+          <button type="button" class="ghost-btn" id="modal-close">Закрыть</button>
+        </div>
+      </header>
+
+      <div class="card-layout">
+        <aside class="card-side">
+          <label class="side-field">
+            <span>Телефон</span>
+            <input id="card-phone" type="text" placeholder="+998 …" />
+          </label>
+          <label class="side-field">
+            <span>Статус</span>
+            <select id="card-status" class="select"></select>
+          </label>
+          <a id="card-ig" class="side-link" href="#" target="_blank" rel="noopener">Открыть Instagram</a>
+          <a id="card-tel" class="side-link" href="#">Позвонить</a>
+        </aside>
+
+        <form id="card-form" class="card-form">
+          <input type="hidden" id="card-id" />
+          <label>
+            <span>ЖК / проект</span>
+            <input name="project_name" type="text" placeholder="Название ЖК" />
+          </label>
+          <label>
+            <span>Локация</span>
+            <input name="location" type="text" placeholder="Район, город" />
+          </label>
+          <label>
+            <span>Когда сдают</span>
+            <input name="handover" type="text" placeholder="IV кв. 2027 / сдан" />
+          </label>
+          <label>
+            <span>Какие кв.м есть</span>
+            <input name="available_sqm" type="text" placeholder="34 / 45 / 57 м²" />
+          </label>
+          <label>
+            <span>Цена от</span>
+            <input name="price_from" type="text" placeholder="от … сум" />
+          </label>
+          <label>
+            <span>Рассрочка (мес.)</span>
+            <input name="installment_months" type="text" placeholder="12 / 24 / 36" />
+          </label>
+          <label>
+            <span>Первый взнос</span>
+            <input name="down_payment" type="text" placeholder="30%" />
+          </label>
+          <label>
+            <span>Ипотека / кредит</span>
+            <input name="mortgage" type="text" placeholder="Да / банк / ставка" />
+          </label>
+          <label>
+            <span>Результат звонка</span>
+            <input name="call_result" type="text" placeholder="Что ответили" />
+          </label>
+          <label>
+            <span>Перезвонить</span>
+            <input name="next_call_at" type="datetime-local" />
+          </label>
+          <label class="full">
+            <span>Заметки</span>
+            <textarea name="notes" rows="4" placeholder="Что ещё важно…"></textarea>
+          </label>
+          <div class="card-actions">
+            <p class="card-save-status" id="card-save-status"></p>
+            <button type="submit" class="upload-btn">Сохранить</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/static/app.js"></script>
+</body>
+</html>

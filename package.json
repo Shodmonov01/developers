@@ -1,0 +1,20 @@
+{
+  "name": "developer-profiler",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "groq-sdk": "^0.22.0",
+    "multer": "^2.0.1",
+    "sharp": "^0.34.2"
+  }
+}

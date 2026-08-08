@@ -27,9 +27,6 @@ const cardIg = document.getElementById("card-ig");
 const cardTel = document.getElementById("card-tel");
 const cardSite = document.getElementById("card-site");
 const cardTg = document.getElementById("card-tg");
-const cardInfo = document.getElementById("card-info");
-const cardShot = document.getElementById("card-shot");
-const cardShotLink = document.getElementById("card-shot-link");
 const uploadQueueEl = document.getElementById("upload-queue");
 const toastEl = document.getElementById("toast");
 
@@ -478,34 +475,28 @@ async function openCard(id) {
     cardSite.style.display = "none";
   }
 
-  const tg = (dev.telegram_handles || [])[0] || (webInfo?.telegram || [])[0];
+  const tgCandidates = [
+    ...(dev.telegram_handles || []),
+    ...(webInfo?.telegram || []),
+  ]
+    .map((t) => String(t).replace(/^@/, "").toLowerCase())
+    .filter((t) => t && !["facebook", "instagram", "share", "joinchat"].includes(t));
+  const tg = tgCandidates[0];
   if (tg) {
-    cardTg.href = `https://t.me/${String(tg).replace(/^@/, "")}`;
+    cardTg.href = `https://t.me/${tg}`;
     cardTg.style.display = "";
   } else {
     cardTg.style.display = "none";
   }
 
-  if (data.has_screenshot) {
-    const src = `/api/developers/${data.id}/screenshot?t=${encodeURIComponent(data.updated_at || "")}`;
-    cardShot.src = src;
-    cardShotLink.href = src;
-    cardShotLink.classList.remove("hidden");
-  } else {
-    cardShot.removeAttribute("src");
-    cardShotLink.classList.add("hidden");
-  }
-
-  renderCardInfo(data.profile, webInfo);
-
   const notes = data.call_notes || {};
+  const auto = suggestNotesFromProfile(data.profile, webInfo);
   for (const name of NOTE_FIELDS) {
     const el = cardForm.elements.namedItem(name);
     if (!el) continue;
-    let value = notes[name] || "";
-    if (name === "next_call_at" && value) {
-      value = toLocalInput(value);
-    }
+    let value = String(notes[name] || "").trim();
+    if (!value && auto[name]) value = auto[name];
+    if (name === "next_call_at" && value) value = toLocalInput(value);
     el.value = value;
   }
 
@@ -531,86 +522,128 @@ function firstWebsite(dev, webInfo) {
   return null;
 }
 
-function infoRow(label, value) {
-  if (!value) return "";
-  return `<div class="info-row"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`;
+/** Pull sqm range like "42,8 м² - 82,2 м²" out of free text. */
+function extractSqm(text) {
+  if (!text) return null;
+  const m = String(text).match(
+    /(\d+[.,]?\d*\s*(?:м²|м2|кв\.?\s*м)(?:\s*[-–—]\s*\d+[.,]?\d*\s*(?:м²|м2|кв\.?\s*м))?)/i,
+  );
+  return m ? m[1].replace(/\s+/g, " ").trim() : null;
 }
 
-function renderCardInfo(profile, webInfo) {
-  if (!profile) {
-    cardInfo.innerHTML = "";
-    return;
+function firstNonEmpty(...vals) {
+  for (const v of vals) {
+    if (v == null) continue;
+    const s = String(v).trim();
+    if (s) return s;
   }
-  const dev = profile.developer || {};
-  const proj = profile.project || {};
-  const parts = [];
+  return "";
+}
 
-  const about = webInfo?.about_ru || profile.summary_ru;
-  if (about) parts.push(`<p class="info-about">${escapeHtml(about)}</p>`);
-
-  parts.push(infoRow("Адрес", dev.address || webInfo?.address));
-  parts.push(infoRow("Часы работы", dev.working_hours || webInfo?.working_hours));
-  parts.push(infoRow("Email", (dev.emails || []).join(", ")));
-  parts.push(infoRow("Telegram", (dev.telegram_handles || []).join(", ")));
-  parts.push(
-    infoRow("Ещё телефоны", (dev.phones || []).slice(1).join(", ")),
-  );
-
-  const projects = [];
+function collectProjects(profile, webInfo) {
+  const proj = profile?.project || {};
+  const list = [];
   for (const p of webInfo?.projects || []) {
-    if (p?.name) projects.push(p);
+    if (p?.name) list.push(p);
   }
   for (const p of proj.projects_details || []) {
-    if (p?.name && !projects.some((x) => x.name === p.name)) projects.push(p);
+    if (p?.name && !list.some((x) => x.name === p.name)) list.push(p);
   }
-  const names = (proj.mentioned_project_names || []).filter(
-    (n) => n && !projects.some((p) => p.name === n),
+  for (const name of proj.mentioned_project_names || []) {
+    if (name && !list.some((x) => x.name === name)) list.push({ name });
+  }
+  return list;
+}
+
+/** Map vision/web enrichment into empty call-note fields. */
+function suggestNotesFromProfile(profile, webInfo) {
+  const out = {
+    project_name: "",
+    location: "",
+    handover: "",
+    available_sqm: "",
+    price_from: "",
+    installment_months: "",
+    down_payment: "",
+    mortgage: "",
+    call_result: "",
+    next_call_at: "",
+    notes: "",
+  };
+  if (!profile) return out;
+
+  const proj = profile.project || {};
+  const dev = profile.developer || {};
+  const projects = collectProjects(profile, webInfo);
+  const first = projects[0] || null;
+
+  out.project_name = firstNonEmpty(
+    first?.name,
+    (proj.mentioned_project_names || [])[0],
   );
 
-  if (projects.length || names.length) {
-    const items = [
-      ...projects.map((p) => {
-        const bits = [p.location, p.price_from, p.handover, p.sizes]
+  out.location = firstNonEmpty(
+    first?.location,
+    (proj.location_hints || [])[0],
+    (dev.cities || [])[0],
+    webInfo?.address,
+    dev.address,
+  );
+
+  out.handover = firstNonEmpty(
+    first?.handover,
+    (proj.handover_hints || [])[0],
+  );
+
+  out.available_sqm = firstNonEmpty(
+    first?.sizes && extractSqm(first.sizes) ? extractSqm(first.sizes) : first?.sizes,
+    ...(proj.apartment_sizes_hints || []).map((h) => extractSqm(h) || h),
+    ...projects.map((p) => extractSqm(p.sizes) || extractSqm([p.name, p.location, p.sizes].filter(Boolean).join(" · "))),
+  );
+
+  // also scan joined project line (e.g. "66 Avenue — Новый Узбекистан · 42,8 м² - 82,2 м²")
+  if (!out.available_sqm && first) {
+    out.available_sqm =
+      extractSqm(
+        [first.name, first.location, first.sizes, first.price_from, first.handover]
           .filter(Boolean)
-          .join(" · ");
-        return `<li><b>${escapeHtml(p.name)}</b>${bits ? ` — ${escapeHtml(bits)}` : ""}</li>`;
-      }),
-      ...names.map((n) => `<li><b>${escapeHtml(n)}</b></li>`),
-    ];
-    parts.push(
-      `<div class="info-row"><span>Проекты</span><ul class="info-list">${items.join("")}</ul></div>`,
-    );
+          .join(" · "),
+      ) || "";
   }
 
-  const hints = [
-    ...(proj.price_hints || []),
+  out.price_from = firstNonEmpty(
+    first?.price_from,
+    (proj.price_hints || [])[0],
+  );
+
+  const paymentBits = [
     ...(proj.payment_terms_hints || []),
-    ...(proj.handover_hints || []),
-    ...(proj.apartment_sizes_hints || []),
-  ]
-    .filter(Boolean)
-    .slice(0, 8);
-  if (hints.length) {
-    parts.push(
-      `<div class="info-row"><span>Цены и условия со скрина</span><ul class="info-list">${hints
-        .map((h) => `<li>${escapeHtml(h)}</li>`)
-        .join("")}</ul></div>`,
-    );
+    ...(webInfo?.offers || []),
+  ].join(" ");
+
+  const months = paymentBits.match(/(\d{1,2})\s*(?:мес|месяц)/i);
+  if (months) out.installment_months = months[1];
+
+  const down = paymentBits.match(
+    /(?:первый\s*взнос|перв\.?\s*взнос|взнос)\s*[:\-]?\s*(\d+\s*%?)/i,
+  );
+  if (down) out.down_payment = down[1].includes("%") ? down[1] : `${down[1]}%`;
+
+  if (/ипотек/i.test(paymentBits)) {
+    const m = paymentBits.match(/ипотек[а-я]*[^.;,]{0,40}/i);
+    out.mortgage = m ? m[0].trim() : "есть";
   }
 
-  const offers = (webInfo?.offers || []).filter(Boolean).slice(0, 5);
-  if (offers.length) {
-    parts.push(
-      `<div class="info-row"><span>Акции</span><ul class="info-list">${offers
-        .map((o) => `<li>${escapeHtml(o)}</li>`)
-        .join("")}</ul></div>`,
-    );
+  const extras = [];
+  if (webInfo?.about_ru) extras.push(webInfo.about_ru);
+  else if (profile.summary_ru) extras.push(profile.summary_ru);
+  if ((webInfo?.offers || []).length) {
+    extras.push(`Акции: ${webInfo.offers.filter(Boolean).slice(0, 3).join("; ")}`);
   }
+  if ((dev.emails || []).length) extras.push(`Email: ${dev.emails[0]}`);
+  out.notes = extras.join("\n\n");
 
-  const html = parts.filter(Boolean).join("");
-  cardInfo.innerHTML = html
-    ? `<p class="info-title">Инфо из скрина и веба</p>${html}`
-    : "";
+  return out;
 }
 
 function closeCard() {

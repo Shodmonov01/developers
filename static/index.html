@@ -2,7 +2,8 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f7f1e8" />
   <title>Developer Profiler</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -13,32 +14,32 @@
   <div class="bg"></div>
   <main class="shell">
     <header class="hero">
-      <p class="brand">Developer Profiler</p>
-      <h1>База застройщиков</h1>
-      <p class="lede">Скрин → карточка → звонок. Повторный скрин того же Instagram обновляет запись, а не плодит дубликаты.</p>
+      <div class="hero-row">
+        <div>
+          <p class="brand">Developer Profiler</p>
+          <h1>База застройщиков</h1>
+        </div>
+        <button type="button" class="upload-btn add-btn" id="open-upload">+ Скрин</button>
+      </div>
+      <p class="lede">Скрин → карточка → звонок. Повторный скрин того же Instagram обновляет запись.</p>
     </header>
-
-    <section class="upload" id="dropzone">
-      <input type="file" id="file" accept="image/*" hidden />
-      <button type="button" class="upload-btn" id="pick">Выбрать скриншот</button>
-      <p class="hint">PNG / JPG — реклама или профиль Instagram</p>
-      <p class="status" id="status"></p>
-    </section>
 
     <section class="stats" id="stats"></section>
 
     <section class="panel table-panel">
       <div class="toolbar">
-        <input type="search" id="search" class="search" placeholder="Поиск: имя, Instagram, телефон…" />
-        <select id="filter-status" class="select">
-          <option value="all">Все статусы</option>
-        </select>
-        <select id="filter-phone" class="select">
-          <option value="all">Все телефоны</option>
-          <option value="with">С телефоном</option>
-          <option value="without">Без телефона</option>
-        </select>
-        <a class="ghost-btn" href="/api/developers/export.csv">CSV</a>
+        <input type="search" id="search" class="search" placeholder="Поиск…" enterkeyhint="search" />
+        <div class="toolbar-filters">
+          <select id="filter-status" class="select">
+            <option value="all">Все статусы</option>
+          </select>
+          <select id="filter-phone" class="select">
+            <option value="all">Все телефоны</option>
+            <option value="with">С телефоном</option>
+            <option value="without">Без телефона</option>
+          </select>
+          <a class="ghost-btn csv-btn" href="/api/developers/export.csv">CSV</a>
+        </div>
       </div>
 
       <div class="table-wrap desktop-only">
@@ -63,6 +64,26 @@
 
   <div class="toast hidden" id="toast"></div>
 
+  <div class="modal hidden" id="upload-modal" aria-hidden="true">
+    <div class="modal-backdrop" id="upload-backdrop"></div>
+    <div class="modal-card upload-modal-card" role="dialog" aria-modal="true" aria-labelledby="upload-title">
+      <header class="modal-head">
+        <div>
+          <p class="modal-kicker">Загрузка</p>
+          <h2 id="upload-title">Скриншоты</h2>
+        </div>
+        <button type="button" class="ghost-btn" id="upload-close">Закрыть</button>
+      </header>
+      <section class="upload" id="dropzone">
+        <input type="file" id="file" accept="image/*" multiple hidden />
+        <button type="button" class="upload-btn" id="pick">Выбрать файлы</button>
+        <p class="hint">PNG / JPG — можно сразу несколько, обработаю по очереди</p>
+        <p class="status" id="status"></p>
+        <ul class="upload-queue hidden" id="upload-queue"></ul>
+      </section>
+    </div>
+  </div>
+
   <div class="modal hidden" id="modal" aria-hidden="true">
     <div class="modal-backdrop" id="modal-backdrop"></div>
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="card-title">
@@ -80,6 +101,9 @@
 
       <div class="card-layout">
         <aside class="card-side">
+          <a id="card-shot-link" class="card-shot-link hidden" href="#" target="_blank" rel="noopener">
+            <img id="card-shot" class="card-shot" alt="Скриншот" loading="lazy" />
+          </a>
           <label class="side-field">
             <span>Телефон</span>
             <input id="card-phone" type="text" placeholder="+998 …" />
@@ -88,8 +112,13 @@
             <span>Статус</span>
             <select id="card-status" class="select"></select>
           </label>
-          <a id="card-ig" class="side-link" href="#" target="_blank" rel="noopener">Открыть Instagram</a>
-          <a id="card-tel" class="side-link" href="#">Позвонить</a>
+          <div class="side-links">
+            <a id="card-tel" class="side-link" href="#">Позвонить</a>
+            <a id="card-ig" class="side-link" href="#" target="_blank" rel="noopener">Instagram</a>
+            <a id="card-site" class="side-link" href="#" target="_blank" rel="noopener">Сайт</a>
+            <a id="card-tg" class="side-link" href="#" target="_blank" rel="noopener">Telegram</a>
+          </div>
+          <div class="card-info" id="card-info"></div>
         </aside>
 
         <form id="card-form" class="card-form">

@@ -48,6 +48,47 @@ let statuses = [];
 let allRows = [];
 let toastTimer = null;
 
+function applyTelegramInsets(tg) {
+  const safe = tg.safeAreaInset || {};
+  const content = tg.contentSafeAreaInset || {};
+  const root = document.documentElement;
+  if (safe.top != null) root.style.setProperty("--safe-top", `${safe.top}px`);
+  if (safe.bottom != null) root.style.setProperty("--safe-bottom", `${safe.bottom}px`);
+  if (safe.left != null) root.style.setProperty("--safe-left", `${safe.left}px`);
+  if (safe.right != null) root.style.setProperty("--safe-right", `${safe.right}px`);
+  root.style.setProperty("--tg-content-top", `${content.top || 0}px`);
+  root.style.setProperty("--tg-content-bottom", `${content.bottom || 0}px`);
+  if (tg.themeParams?.bg_color) {
+    root.style.setProperty("--tg-bg", tg.themeParams.bg_color);
+  }
+}
+
+function initTelegramMiniApp() {
+  const tg = window.Telegram?.WebApp;
+  if (!tg) return null;
+
+  document.documentElement.classList.add("tg-miniapp");
+  try {
+    tg.ready();
+    tg.expand();
+    if (typeof tg.disableVerticalSwipes === "function") tg.disableVerticalSwipes();
+    if (typeof tg.setHeaderColor === "function") tg.setHeaderColor("secondary_bg_color");
+    if (typeof tg.setBackgroundColor === "function") {
+      tg.setBackgroundColor(tg.themeParams?.bg_color || "#f7f1e8");
+    }
+  } catch {
+    // older clients
+  }
+
+  applyTelegramInsets(tg);
+  tg.onEvent?.("safeAreaChanged", () => applyTelegramInsets(tg));
+  tg.onEvent?.("contentSafeAreaChanged", () => applyTelegramInsets(tg));
+  tg.onEvent?.("viewportChanged", () => applyTelegramInsets(tg));
+  return tg;
+}
+
+initTelegramMiniApp();
+
 function openUpload() {
   uploadModal.classList.remove("hidden");
   uploadModal.setAttribute("aria-hidden", "false");

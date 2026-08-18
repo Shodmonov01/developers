@@ -3,9 +3,17 @@ const pick = document.getElementById("pick");
 const dropzone = document.getElementById("dropzone");
 const statusEl = document.getElementById("status");
 const openUploadBtn = document.getElementById("open-upload");
+const openManualBtn = document.getElementById("open-manual");
 const uploadModal = document.getElementById("upload-modal");
 const uploadClose = document.getElementById("upload-close");
 const uploadBackdrop = document.getElementById("upload-backdrop");
+const tabScreen = document.getElementById("tab-screen");
+const tabManual = document.getElementById("tab-manual");
+const manualForm = document.getElementById("manual-form");
+const manualStatus = document.getElementById("manual-status");
+const manualSubmit = document.getElementById("manual-submit");
+const enrichBtn = document.getElementById("enrich-btn");
+const enrichStatus = document.getElementById("enrich-status");
 const tbody = document.getElementById("tbody");
 const mobileCards = document.getElementById("mobile-cards");
 const statsEl = document.getElementById("stats");
@@ -89,10 +97,24 @@ function initTelegramMiniApp() {
 
 initTelegramMiniApp();
 
-function openUpload() {
+function setAddTab(which) {
+  const isManual = which === "manual";
+  tabScreen.classList.toggle("is-active", !isManual);
+  tabManual.classList.toggle("is-active", isManual);
+  tabScreen.setAttribute("aria-selected", String(!isManual));
+  tabManual.setAttribute("aria-selected", String(isManual));
+  dropzone.classList.toggle("hidden", isManual);
+  manualForm.classList.toggle("hidden", !isManual);
+}
+
+function openUpload(tab = "screen") {
+  setAddTab(tab);
   uploadModal.classList.remove("hidden");
   uploadModal.setAttribute("aria-hidden", "false");
   document.body.classList.add("modal-open");
+  if (tab === "manual") {
+    manualForm.elements.namedItem("name")?.focus();
+  }
 }
 
 function closeUpload() {
@@ -103,7 +125,10 @@ function closeUpload() {
   }
 }
 
-openUploadBtn.addEventListener("click", openUpload);
+openUploadBtn.addEventListener("click", () => openUpload("screen"));
+openManualBtn.addEventListener("click", () => openUpload("manual"));
+tabScreen.addEventListener("click", () => setAddTab("screen"));
+tabManual.addEventListener("click", () => setAddTab("manual"));
 uploadClose.addEventListener("click", closeUpload);
 uploadBackdrop.addEventListener("click", closeUpload);
 
@@ -139,6 +164,69 @@ document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if (!modal.classList.contains("hidden")) closeCard();
   else if (!uploadModal.classList.contains("hidden")) closeUpload();
+});
+
+manualForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const fd = new FormData(manualForm);
+  const body = {
+    name: String(fd.get("name") || "").trim(),
+    handle: String(fd.get("handle") || "").trim(),
+    phone: String(fd.get("phone") || "").trim(),
+    website: String(fd.get("website") || "").trim(),
+    telegram: String(fd.get("telegram") || "").trim(),
+    notes: String(fd.get("notes") || "").trim(),
+    enrich: Boolean(fd.get("enrich")),
+  };
+  if (!body.name && !body.handle) {
+    manualStatus.textContent = "Укажи название или Instagram";
+    return;
+  }
+
+  manualSubmit.disabled = true;
+  manualStatus.textContent = body.enrich
+    ? "Ищу данные в сети… это может занять минуту"
+    : "Создаю карточку…";
+  try {
+    const r = await fetch("/api/developers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || "Не удалось создать");
+    manualForm.reset();
+    const enrichEl = manualForm.elements.namedItem("enrich");
+    if (enrichEl) enrichEl.checked = true;
+    closeUpload();
+    toast(data.message || `Добавлен: ${data.name}`);
+    await loadTable();
+    if (data.id) openCard(data.id);
+  } catch (err) {
+    manualStatus.textContent = err.message || String(err);
+  } finally {
+    manualSubmit.disabled = false;
+  }
+});
+
+enrichBtn.addEventListener("click", async () => {
+  const id = cardId.value;
+  if (!id) return;
+  enrichBtn.disabled = true;
+  enrichStatus.textContent = "Ищу в сети…";
+  try {
+    const r = await fetch(`/api/developers/${id}/enrich`, { method: "POST" });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || "Не удалось найти данные");
+    enrichStatus.textContent = data.message || "Готово";
+    toast(data.phone ? `Нашли: ${data.phone}` : data.message || "Данные обновлены");
+    await loadTable();
+    await openCard(id);
+  } catch (err) {
+    enrichStatus.textContent = err.message || String(err);
+  } finally {
+    enrichBtn.disabled = false;
+  }
 });
 
 deleteBtn.addEventListener("click", async () => {
@@ -475,6 +563,7 @@ function renderTable() {
 
 async function openCard(id) {
   cardSaveStatus.textContent = "";
+  enrichStatus.textContent = "";
   const res = await fetch(`/api/developers/${id}`);
   const data = await res.json();
   if (!res.ok) {

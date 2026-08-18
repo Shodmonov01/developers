@@ -92,6 +92,131 @@ function notesFilled(notes = {}) {
   ].some((k) => String(notes[k] || "").trim());
 }
 
+async function writeScreenshot(folder, imageBuffer, filename) {
+  if (!imageBuffer?.length) return null;
+  const ext = path.extname(filename || "").toLowerCase() || ".png";
+  const imagePath = path.join(folder, `screenshot${ext}`);
+  try {
+    const files = await fs.readdir(folder);
+    await Promise.all(
+      files
+        .filter((f) => f.startsWith("screenshot."))
+        .map((f) => fs.unlink(path.join(folder, f)).catch(() => {})),
+    );
+  } catch {
+    // ignore
+  }
+  await fs.writeFile(imagePath, imageBuffer);
+  return imagePath;
+}
+
+function fillEmptyCallNotes(notes, profile) {
+  const web = profile?._meta?.contact_enrichment?.web_info || {};
+  const first = Array.isArray(web.projects) ? web.projects[0] || {} : {};
+  const d = profile?.developer || {};
+  const setIfEmpty = (key, value) => {
+    if (String(notes[key] || "").trim()) return;
+    if (value == null || String(value).trim() === "") return;
+    notes[key] = String(value).trim();
+  };
+  setIfEmpty("project_name", first.name);
+  setIfEmpty("location", first.location || web.address || d.address);
+  setIfEmpty("handover", first.handover);
+  setIfEmpty("available_sqm", first.sizes);
+  setIfEmpty("price_from", first.price_from);
+  const extras = [];
+  if (web.about_ru) extras.push(web.about_ru);
+  if ((web.offers || []).length) {
+    extras.push(`Акции: ${web.offers.filter(Boolean).slice(0, 3).join("; ")}`);
+  }
+  if ((d.emails || []).length) extras.push(`Email: ${d.emails[0]}`);
+  setIfEmpty("notes", extras.join("\n\n"));
+  return notes;
+}
+
+function syncIndexFromProfile(item, profile, now) {
+  const developer = profile.developer || {};
+  const name =
+    developer.legal_or_brand_name || developer.instagram_handle || item.name || "unknown";
+  const handle = normHandle(developer.instagram_handle) || item.handle || null;
+  const phone = firstPhone(developer) || item.phone || null;
+  Object.assign(item, {
+    name,
+    handle,
+    phone,
+    country: developer.country ?? item.country ?? null,
+    summary_ru: profile.summary_ru ?? item.summary_ru ?? null,
+    confidence: profile.extraction_confidence_overall ?? item.confidence ?? null,
+    updated_at: now,
+  });
+  return { name, handle, phone };
+}
+
+export function profileFromManual(input = {}) {
+  const name = String(input.name || "").trim();
+  const handle = normHandle(input.handle || input.instagram);
+  const phoneRaw = String(input.phone || "").trim();
+  const website = String(input.website || "").trim();
+  const telegramRaw = String(input.telegram || "").trim().replace(/^@/, "");
+  const notes = String(input.notes || "").trim();
+
+  return {
+    source: {
+      platform: "manual",
+      content_type: "manual_entry",
+      is_paid_ad: false,
+      ui_language: "ru",
+      screenshot_notes: null,
+    },
+    developer: {
+      legal_or_brand_name: name || handle || "unknown",
+      name_variants: [],
+      instagram_handle: handle,
+      other_handles: [],
+      telegram_handles: telegramRaw ? [`@${telegramRaw}`] : [],
+      is_verified: null,
+      website_candidates: website ? [website] : [],
+      emails: [],
+      phones: phoneRaw ? [phoneRaw] : [],
+      address: null,
+      working_hours: null,
+      country: "UZ",
+      cities: [],
+      languages_used: [],
+      entity_type: "developer",
+      years_on_market_hint: null,
+      confidence: 1,
+    },
+    project: {
+      mentioned_project_names: [],
+      projects_details: [],
+      segment: null,
+      stage_hints: [],
+      usp_keywords_original: [],
+      usp_keywords_ru: [],
+      usp_keywords_en: [],
+      price_hints: [],
+      payment_terms_hints: [],
+      location_hints: [],
+      handover_hints: [],
+      apartment_sizes_hints: [],
+      confidence: null,
+    },
+    marketing: {},
+    engagement: {},
+    visual: {},
+    risk_and_signals: {},
+    enrichment: {
+      primary_identifiers: [name, handle, phoneRaw].filter(Boolean),
+      followup_search_queries: [],
+      suggested_next_sources: [],
+    },
+    raw_ocr: { all_readable_text: notes || "", uncertain_readings: [] },
+    summary_ru: notes || (name ? `Карточка создана вручную: ${name}` : null),
+    extraction_confidence_overall: 1,
+  };
+}
+
 export async function saveProfile(dataRoot, profile, imageBuffer, filename) {
   const developersDir = path.join(dataRoot, "developers");
   const developer = profile.developer || {};
@@ -110,24 +235,57 @@ export async function saveProfile(dataRoot, profile, imageBuffer, filename) {
   if (existing) {
     const folder = existing.folder;
     const full = await readRecord(folder);
-    const ext = path.extname(filename || "").toLowerCase() || ".jpg";
-    const imagePath = path.join(folder, `screenshot${ext}`);
+    const imagePath = await writeScreenshot(folder, imageBuffer, filename);
 
-    // remove old screenshot.* then write new
-    try {
-      const files = await fs.readdir(folder);
-      await Promise.all(
-        files
-          .filter((f) => f.startsWith("screenshot."))
-          .map((f) => fs.unlink(path.join(folder, f)).catch(() => {})),
-      );
-    } catch {
-      // ignore
+    if (imagePath) {
+      full.profile = profile;
+      full.screenshot_path = imagePath;
+    } else {
+      const prevDev = full.profile?.developer || {};
+      const nextDev = profile.developer || {};
+      full.profile = {
+        ...(full.profile || {}),
+        developer: {
+          ...prevDev,
+          ...nextDev,
+          legal_or_brand_name:
+            nextDev.legal_or_brand_name || prevDev.legal_or_brand_name || null,
+          instagram_handle:
+            nextDev.instagram_handle || prevDev.instagram_handle || null,
+          phones: [
+            ...new Set(
+              [...(nextDev.phones || []), ...(prevDev.phones || [])].filter(Boolean),
+            ),
+          ].slice(0, 4),
+          website_candidates: [
+            ...new Set(
+              [
+                ...(nextDev.website_candidates || []),
+                ...(prevDev.website_candidates || []),
+              ].filter(Boolean),
+            ),
+          ].slice(0, 6),
+          telegram_handles: [
+            ...new Set(
+              [
+                ...(nextDev.telegram_handles || []),
+                ...(prevDev.telegram_handles || []),
+              ].filter(Boolean),
+            ),
+          ].slice(0, 5),
+          emails: [
+            ...new Set(
+              [...(nextDev.emails || []), ...(prevDev.emails || [])].filter(Boolean),
+            ),
+          ].slice(0, 5),
+        },
+        summary_ru: profile.summary_ru || full.profile?.summary_ru || null,
+        _meta: {
+          ...(full.profile?._meta || {}),
+          ...(profile._meta || {}),
+        },
+      };
     }
-    await fs.writeFile(imagePath, imageBuffer);
-
-    full.profile = profile;
-    full.screenshot_path = imagePath;
     full.updated_at = now;
     if (!full.call_notes) full.call_notes = emptyCallNotes();
     if (phone) {
@@ -172,9 +330,7 @@ export async function saveProfile(dataRoot, profile, imageBuffer, filename) {
   );
   await fs.mkdir(folder, { recursive: true });
 
-  const ext = path.extname(filename || "").toLowerCase() || ".png";
-  const imagePath = path.join(folder, `screenshot${ext}`);
-  await fs.writeFile(imagePath, imageBuffer);
+  const imagePath = await writeScreenshot(folder, imageBuffer, filename);
 
   const record = {
     id: recordId,
@@ -207,6 +363,28 @@ export async function saveProfile(dataRoot, profile, imageBuffer, filename) {
   await writeIndex(dataRoot, index);
 
   return { ...rowFromItem(item), upserted: false };
+}
+
+export async function applyEnrichedProfile(dataRoot, recordId, profile) {
+  const index = await readIndex(dataRoot);
+  const item = index.find((x) => x.id === recordId);
+  if (!item) return null;
+
+  const now = new Date().toISOString();
+  const full = await readRecord(item.folder);
+  full.profile = profile;
+  if (!full.call_notes) full.call_notes = emptyCallNotes();
+  fillEmptyCallNotes(full.call_notes, profile);
+  full.call_notes.updated_at = now;
+  full.updated_at = now;
+  await writeRecord(item.folder, full);
+
+  syncIndexFromProfile(item, profile, now);
+  item.has_notes = notesFilled(full.call_notes);
+  const rest = index.filter((x) => x.id !== item.id);
+  await writeIndex(dataRoot, [item, ...rest]);
+
+  return getDeveloper(dataRoot, recordId);
 }
 
 export async function listDevelopers(dataRoot) {

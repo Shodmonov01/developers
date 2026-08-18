@@ -1,6 +1,8 @@
 node_modules/
 data/
 .env
+screen-filter/
+screen-rejected/
 .venv/
 venv/
 __pycache__/

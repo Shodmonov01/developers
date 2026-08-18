@@ -18,9 +18,12 @@
       <p class="brand">Developer Profiler</p>
       <div class="hero-row">
         <h1>База застройщиков</h1>
-        <button type="button" class="upload-btn add-btn" id="open-upload">+ Скрин</button>
+        <div class="hero-actions">
+          <button type="button" class="upload-btn add-btn" id="open-upload">+ Скрин</button>
+          <button type="button" class="ghost-btn add-btn" id="open-manual">+ Карточка</button>
+        </div>
       </div>
-      <p class="lede">Скрин → карточка → звонок. Повторный скрин того же Instagram обновляет запись.</p>
+      <p class="lede">Скрин или ручная карточка → звонок. Повторный скрин того же Instagram обновляет запись.</p>
     </header>
 
     <section class="stats" id="stats"></section>
@@ -52,7 +55,7 @@
             </tr>
           </thead>
           <tbody id="tbody">
-            <tr class="empty"><td colspan="4">Пока пусто — загрузи скриншот</td></tr>
+            <tr class="empty"><td colspan="4">Пока пусто — загрузи скриншот или добавь карточку</td></tr>
           </tbody>
         </table>
       </div>
@@ -69,10 +72,14 @@
       <header class="modal-head">
         <div>
           <p class="modal-kicker">Загрузка</p>
-          <h2 id="upload-title">Скриншоты</h2>
+          <h2 id="upload-title">Добавить</h2>
         </div>
         <button type="button" class="ghost-btn" id="upload-close">Закрыть</button>
       </header>
+      <div class="add-tabs" role="tablist">
+        <button type="button" class="add-tab is-active" id="tab-screen" role="tab" aria-selected="true">Скрин</button>
+        <button type="button" class="add-tab" id="tab-manual" role="tab" aria-selected="false">Вручную</button>
+      </div>
       <section class="upload" id="dropzone">
         <input type="file" id="file" accept="image/*" multiple hidden />
         <button type="button" class="upload-btn" id="pick">Выбрать файлы</button>
@@ -80,6 +87,38 @@
         <p class="status" id="status"></p>
         <ul class="upload-queue hidden" id="upload-queue"></ul>
       </section>
+      <form class="manual-form hidden" id="manual-form">
+        <label>
+          <span>Компания / ЖК</span>
+          <input name="name" type="text" placeholder="Mirabad, KAYAN, …" autocomplete="organization" />
+        </label>
+        <label>
+          <span>Instagram</span>
+          <input name="handle" type="text" placeholder="@kayan.uz" autocapitalize="off" />
+        </label>
+        <label>
+          <span>Телефон</span>
+          <input name="phone" type="tel" placeholder="+998 …" />
+        </label>
+        <label>
+          <span>Сайт</span>
+          <input name="website" type="text" placeholder="https://…" autocapitalize="off" />
+        </label>
+        <label>
+          <span>Telegram</span>
+          <input name="telegram" type="text" placeholder="@channel или t.me/…" autocapitalize="off" />
+        </label>
+        <label class="full">
+          <span>Что известно</span>
+          <textarea name="notes" rows="3" placeholder="Район, цены, что уже знаешь…"></textarea>
+        </label>
+        <label class="check-row">
+          <input type="checkbox" name="enrich" checked />
+          <span>Сразу найти телефон и данные через ИИ</span>
+        </label>
+        <p class="status" id="manual-status"></p>
+        <button type="submit" class="upload-btn" id="manual-submit">Создать карточку</button>
+      </form>
     </div>
   </div>
 
@@ -114,6 +153,8 @@
             <a id="card-site" class="side-link" href="#" target="_blank" rel="noopener">Сайт</a>
             <a id="card-tg" class="side-link" href="#" target="_blank" rel="noopener">Telegram</a>
           </div>
+          <button type="button" class="ghost-btn enrich-btn" id="enrich-btn">Найти данные ИИ</button>
+          <p class="card-save-status" id="enrich-status"></p>
         </aside>
 
         <form id="card-form" class="card-form">

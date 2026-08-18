@@ -95,10 +95,93 @@ h1 {
   line-height: 1.45;
 }
 
+.hero-actions {
+  display: flex;
+  gap: 0.45rem;
+  flex: none;
+}
+
 .add-btn {
   flex: none;
   white-space: nowrap;
   padding: 0.55rem 0.9rem;
+}
+
+.add-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+  margin: 0 0 0.85rem;
+}
+
+.add-tab {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  padding: 0.55rem 0.7rem;
+  cursor: pointer;
+}
+
+.add-tab.is-active {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+
+.manual-form {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.manual-form.hidden { display: none; }
+
+.manual-form label {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.manual-form span {
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.manual-form input,
+.manual-form textarea {
+  font: inherit;
+  border: 1px solid var(--line);
+  background: #fff;
+  padding: 0.65rem 0.75rem;
+  width: 100%;
+}
+
+.manual-form .check-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  grid-template-columns: none;
+}
+
+.manual-form .check-row span {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.92rem;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.manual-form .check-row input {
+  width: auto;
+}
+
+.enrich-btn {
+  width: 100%;
+  justify-content: center;
 }
 
 .upload {
@@ -113,9 +196,11 @@ h1 {
   background: rgba(255, 248, 240, 0.95);
 }
 
+.upload.hidden { display: none; }
+
 .upload-modal-card {
   width: min(480px, 100%);
-  max-height: min(90vh, 640px);
+  max-height: min(92vh, 760px);
 }
 
 .upload-btn {
@@ -743,6 +828,11 @@ body.modal-open { overflow: hidden; }
     flex-direction: column;
     align-items: stretch;
     gap: 0.55rem;
+  }
+
+  .hero-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 
   h1 {

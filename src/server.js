@@ -10,12 +10,14 @@ import { STATUSES } from "./lib/callNotes.js";
 import { extractDeveloperProfile } from "./lib/groq.js";
 import { enrichDeveloperContacts } from "./lib/enrich.js";
 import {
+  applyEnrichedProfile,
   deleteDeveloper,
   ensureDataDirs,
   exportCsv,
   getDeveloper,
   getScreenshotPath,
   listDevelopers,
+  profileFromManual,
   resolveDataRoot,
   saveCallNotes,
   saveProfile,
@@ -129,6 +131,69 @@ app.put("/api/developers/:id/call-notes", async (req, res) => {
     res.json(updated);
   } catch (e) {
     res.status(500).json({ error: e.message || String(e) });
+  }
+});
+
+app.post("/api/developers", async (req, res) => {
+  const body = req.body || {};
+  const name = String(body.name || "").trim();
+  const handle = String(body.handle || body.instagram || "").trim();
+  if (!name && !handle) {
+    res.status(400).json({ error: "Укажи название или Instagram" });
+    return;
+  }
+
+  try {
+    const profile = profileFromManual(body);
+    if (body.enrich) {
+      await enrichDeveloperContacts(profile);
+    }
+    const row = await saveProfile(DATA_ROOT, profile, null, null);
+    if (body.enrich) {
+      await applyEnrichedProfile(DATA_ROOT, row.id, profile);
+    }
+    const notes = String(body.notes || "").trim();
+    if (notes) {
+      await saveCallNotes(DATA_ROOT, row.id, { notes });
+    }
+    const full = await getDeveloper(DATA_ROOT, row.id);
+    res.json({
+      ...(full || row),
+      upserted: row.upserted,
+      hint: profile._meta?.contact_enrichment?.hint || null,
+      message: row.upserted
+        ? `Обновлён существующий: ${row.name}`
+        : `Добавлен: ${row.name}`,
+    });
+  } catch (e) {
+    const status = e.status || 502;
+    res.status(status).json({ error: e.message || String(e) });
+  }
+});
+
+app.post("/api/developers/:id/enrich", async (req, res) => {
+  const record = await getDeveloper(DATA_ROOT, req.params.id);
+  if (!record) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  try {
+    const profile = record.profile || profileFromManual({
+      name: record.name,
+      handle: record.handle,
+      phone: record.phone,
+    });
+    await enrichDeveloperContacts(profile);
+    const updated = await applyEnrichedProfile(DATA_ROOT, req.params.id, profile);
+    res.json({
+      ...updated,
+      hint: profile._meta?.contact_enrichment?.hint || null,
+      message: "Данные обновлены",
+    });
+  } catch (e) {
+    const status = e.status || 502;
+    res.status(status).json({ error: `Groq error: ${e.message || e}` });
   }
 });
 
